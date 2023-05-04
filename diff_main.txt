@@ -1,0 +1,916 @@
+10c10
+< 
+---
+> #include "src/NekFace.h"
+91a92,95
+> 
+> 
+> 
+> 
+367a372,393
+> void ParseEquals(const std::string &line, std::string &lhs,
+>                                 std::string &rhs)
+> {
+>     /// Pull out lhs and rhs and eliminate any spaces.
+>     size_t beg = line.find_first_not_of(" ");
+>     size_t end = line.find_first_of("=");
+>     // Check for no parameter name
+>     if (beg == end)
+>         throw 1;
+>     // Check for no parameter value
+>     if (end != line.find_last_of("="))
+>         throw 1;
+>     // Check for no equals sign
+>     if (end == std::string::npos)
+>         throw 1;
+> 
+>     lhs = line.substr(line.find_first_not_of(" "), end - beg);
+>     lhs = lhs.substr(0, lhs.find_last_not_of(" ") + 1);
+>     rhs = line.substr(line.find_last_of("=") + 1);
+>     rhs = rhs.substr(rhs.find_first_not_of(" "));
+>     rhs = rhs.substr(0, rhs.find_last_not_of(" ") + 1);
+> }
+369a396,409
+> struct Inputs{
+>     double hgrad;
+>     double hmin;
+>     double hmax;
+>     double MetScale;
+>     double hausd;
+>     int ReadFromStats;
+>     int RunWakRefinement;
+>     double hwake;
+>     int niter;
+>     int recursive;
+>     int extended;
+>     int StateVar;
+> };
+372c412,566
+< 
+---
+> Inputs* ReadXmlFile(const char* filename)
+> {
+>     TiXmlDocument *m_xmlDoc = new TiXmlDocument;
+>     TiXmlDocument doc( filename );
+>     Inputs* inp = new Inputs;
+>     doc.LoadFile();
+>     
+>     TiXmlHandle hDoc(&doc);
+>     
+> //    TiXmlHandle docHandle(m_xmlDoc);
+>     
+> //    TiXmlElement *e;
+> //
+> //    e = doc->FirstChildElement("METRIC").Element();
+> //
+> //    TiXmlElement *parametersElement =
+> //        conditions->FirstChildElement("PARAMETERS");
+>     
+>     TiXmlElement *xmlMetric = doc.FirstChildElement("METRIC");
+>     
+>     
+>     TiXmlElement *xmlParam = xmlMetric->FirstChildElement("PARAMETERS");
+>     
+>     std::map<std::string,double> param_map;
+>     if (xmlParam)
+>     {
+>         TiXmlElement *parameter = xmlParam->FirstChildElement("P");
+>         
+>         while (parameter)
+>         {
+>             TiXmlNode *node = parameter->FirstChild();
+>             
+>             std::string line = node->ToText()->Value(), lhs, rhs;
+>             
+>             try
+>             {
+>                 ParseEquals(line, lhs, rhs);
+>             }
+>             catch (...)
+>             {
+>                 std::cout << "Error reading metric.xml " << std::endl;
+>             }
+>             
+>             if (!lhs.empty() && !rhs.empty())
+>             {
+>                 double value = std::stod(rhs);
+>                 param_map[lhs] = value;
+>                 
+>             }
+>             parameter = parameter->NextSiblingElement();
+>         }
+>     }
+>     
+>     if(param_map.find("hMinimum")!=param_map.end())
+>     {
+>         inp->hmin = param_map["hMinimum"];
+>     }
+>     else
+>     {
+>         std::cout << "Error: hMinimum is not defined in metric.xml." << std::endl;
+>     }
+>     if(param_map.find("hMaximum")!=param_map.end())
+>     {
+>         inp->hmax = param_map["hMaximum"];
+>     }
+>     else
+>     {
+>         std::cout << "Error: hMaximum is not defined in metric.xml." << std::endl;
+>     }
+>     if(param_map.find("hGradation")!=param_map.end())
+>     {
+>         inp->hgrad = param_map["hGradation"];
+>     }
+>     else
+>     {
+>         std::cout << "Error: hGradation is not defined in metric.xml." << std::endl;
+>     }
+>     if(param_map.find("Scaling")!=param_map.end())
+>     {
+>         inp->MetScale = param_map["Scaling"];
+>     }
+>     else
+>     {
+>         std::cout << "Error: Scaling is not defined in metric.xml." << std::endl;
+>     }
+>     if(param_map.find("HausDorff")!=param_map.end())
+>     {
+>         inp->hausd = param_map["HausDorff"];
+>     }
+>     else
+>     {
+>         std::cout << "Error: HausDorff is not defined in metric.xml." << std::endl;
+>     }
+>     if(param_map.find("nIterations")!=param_map.end())
+>     {
+>         inp->niter = param_map["nIterations"];
+>     }
+>     else
+>     {
+>         std::cout << "Error: nIterations is not defined in metric.xml." << std::endl;
+>     }
+>     if(param_map.find("RecursiveReconstruction")!=param_map.end())
+>     {
+>         inp->recursive = param_map["RecursiveReconstruction"];
+>     }
+>     else
+>     {
+>         std::cout << "Error: RecursiveReconstruction is not defined in metric.xml." << std::endl;
+>     }
+>     
+>     if(param_map.find("ExtendedScheme")!=param_map.end())
+>     {
+>         inp->extended = param_map["ExtendedScheme"];
+>     }
+>     else
+>     {
+>         std::cout << "Error: RecursiveReconstruction is not defined in metric.xml." << std::endl;
+>     }
+>     
+>     if(param_map.find("UseStatistics")!=param_map.end())
+>     {
+>         inp->ReadFromStats = param_map["UseStatistics"];
+>     }
+>     else
+>     {
+>         std::cout << "Error: UseStatistics is not defined in metric.xml." << std::endl;
+>     }
+>     if(param_map.find("WakeRefinement")!=param_map.end())
+>     {
+>         inp->RunWakRefinement = param_map["WakeRefinement"];
+>     }
+>     else
+>     {
+>         std::cout << "Error: WakeRefinement is not defined in metric.xml." << std::endl;
+>     }
+>     if(param_map.find("hWake")!=param_map.end())
+>     {
+>         inp->hwake = param_map["hWake"];
+>     }
+>     else
+>     {
+>         std::cout << "Error: hWake is not defined in metric.xml." << std::endl;
+>     }
+>     if(param_map.find("StateVariable")!=param_map.end())
+>     {
+>         inp->StateVar = param_map["StateVariable"];
+>     }
+>     else
+>     {
+>         std::cout << "Error: StateVariable is not defined in metric.xml." << std::endl;
+>     }
+>     
+>     
+>     return inp;
+> }
+395d588
+<     
+396a590
+> 
+399,401c593,614
+<     const char* fn_metric = "inputs/metric.inp";
+<     // inputs 
+<     std::vector<double> metric_inputs = ReadMetricInputs(fn_metric);
+---
+>     const char* fn_metric="inputs/metric.inp";
+> 
+>     Inputs* inputs = ReadXmlFile("inputs/metric.xml");
+> 
+>     
+>     
+>     
+>     
+> //    TiXmlElement *parametersElement =
+> //        conditions->FirstChildElement("PARAMETERS");
+>     
+> 
+>     
+> //    TiXmlHandle docHandle(m_xmlDoc);
+> //    TiXmlElement *e;
+> //    e = docHandle.FirstChildElement("NEKTAR")
+> //            .FirstChildElement("CONDITIONS")
+> //            .Element();
+>     
+>     
+>     
+>     //std::vector<double> metric_inputs = ReadMetricInputs(fn_metric);
+405,417c618,630
+<     int StateVar = 0;
+<     double hgrad         = metric_inputs[0];
+<     double hmin          = metric_inputs[1];
+<     double hmax          = metric_inputs[2];
+<     double MetScale      = metric_inputs[3];
+<     double hausd         = metric_inputs[4];
+<     int ReadFromStats    = metric_inputs[5];
+<     int RunWakRefinement = metric_inputs[6];
+<     double hwake         = metric_inputs[7];
+<     int niter            = metric_inputs[8];
+<     int recursive	     = metric_inputs[9];
+<     int extended         = metric_inputs[10];
+<     StateVar         = metric_inputs[11]; 
+---
+> //    int StateVar = 0;
+> //    double hgrad         = metric_inputs[0];
+> //    double hmin          = metric_inputs[1];
+> //    double hmax          = metric_inputs[2];
+> //    double MetScale      = metric_inputs[3];
+> //    double hausd         = metric_inputs[4];
+> //    int ReadFromStats    = metric_inputs[5];
+> //    int RunWakRefinement = metric_inputs[6];
+> //    double hwake         = metric_inputs[7];
+> //    int niter            = metric_inputs[8];
+> //    int recursive	     = metric_inputs[9];
+> //    int extended         = metric_inputs[10];
+> //    StateVar         = metric_inputs[11];
+424,430c637,643
+<         std::cout << "hgrad     = " << hgrad << std::endl;
+<         std::cout << "hmin      = " << hmin << std::endl;
+<         std::cout << "hmax      = " << hmax << std::endl;
+<         std::cout << "MetScale  = " << MetScale << std::endl;
+<         std::cout << "Hausdorff = " << hausd << std::endl;
+<         std::cout << "NiterPart = " << niter << std::endl;
+<         if(ReadFromStats == 0)
+---
+>         std::cout << "hgrad     = " << inputs->hgrad << std::endl;
+>         std::cout << "hmin      = " << inputs->hmin << std::endl;
+>         std::cout << "hmax      = " << inputs->hmax << std::endl;
+>         std::cout << "MetScale  = " << inputs->MetScale << std::endl;
+>         std::cout << "Hausdorff = " << inputs->hausd << std::endl;
+>         std::cout << "NiterPart = " << inputs->niter << std::endl;
+>         if(inputs->ReadFromStats == 0)
+435c648
+<         if(ReadFromStats == 1)
+---
+>         if(inputs->ReadFromStats == 1)
+441c654
+<         if(RunWakRefinement==0)
+---
+>         if(inputs->RunWakRefinement==0)
+446c659
+<         if(RunWakRefinement==1)
+---
+>         if(inputs->RunWakRefinement==1)
+448c661
+<             std::cout << "Wake refinement is switch ON with hwake = " << hwake << "(6th entry in the metric.inp file is set to 1 and hwake is set equal to the 7th entry defined in the metric.inp file.) " << std::endl;
+---
+>             std::cout << "Wake refinement is switch ON with hwake = " << inputs->hwake << "(6th entry in the metric.inp file is set to 1 and hwake is set equal to the 7th entry defined in the metric.inp file.) " << std::endl;
+450c663
+<         if(StateVar == 0)
+---
+>         if(inputs->StateVar == 0)
+454c667
+< 	if(StateVar == 1)
+---
+> 	if(inputs->StateVar == 1)
+465c678
+<     US3D* us3d    = ReadUS3DData(fn_conn,fn_grid,fn_data,ReadFromStats,StateVar,comm,info);
+---
+>     US3D* us3d    = ReadUS3DData(fn_conn,fn_grid,fn_data,inputs->ReadFromStats,inputs->StateVar,comm,info);
+475c688
+<     if(ReadFromStats==0)
+---
+>     if(inputs->ReadFromStats==0)
+484c697
+<     if(ReadFromStats==1)
+---
+>     if(inputs->ReadFromStats==1)
+503a717
+>     	//std::cout << "ghost " << i << " " << us3d->ghost->getVal(i,varia) << std::endl;
+518c732
+<       
+---
+>     
+582c796
+<     if(ReadFromStats==1)
+---
+>     if(inputs->ReadFromStats==1)
+623c837
+<     if(recursive == 0)
+---
+>     if(inputs->recursive == 0)
+651c865
+<         if(RunWakRefinement == 0)
+---
+>         if(inputs->RunWakRefinement == 0)
+653c867
+<             ComputeMetric(P,metric_inputs,comm,hess_vmap,1.0,po,recursive,extended);
+---
+>             ComputeMetric(P,comm,hess_vmap,1.0,po,inputs->recursive,inputs->extended,inputs->hmin,inputs->hmax,inputs->MetScale);
+656c870
+<         if(RunWakRefinement == 1)
+---
+>         if(inputs->RunWakRefinement == 1)
+658c872
+<             ComputeMetricWithWake(P, metric_inputs, comm, TKE_vmap, hess_vmap, 1.0, po, hwake, recursive);
+---
+>             ComputeMetricWithWake(P, comm, TKE_vmap, hess_vmap, 1.0, po, inputs->hwake, inputs->recursive,inputs->hmin,inputs->hmax,inputs->MetScale);
+675c889
+<     if(recursive == 1)
+---
+>     if(inputs->recursive == 1)
+691c905
+<         if(extended == 1)
+---
+>         if(inputs->extended == 1)
+700c914
+<         if(extended == 0)
+---
+>         if(inputs->extended == 0)
+731d944
+<             
+744c957
+<         if(extended == 1)
+---
+>         if(inputs->extended == 1)
+750c963
+<         if(extended == 0)
+---
+>         if(inputs->extended == 0)
+800c1013
+<         if(RunWakRefinement == 0)
+---
+>         if(inputs->RunWakRefinement == 0)
+802c1015
+<             ComputeMetric(P,metric_inputs,comm,hess_vmap,1.0,po,recursive,extended);
+---
+>             ComputeMetric(P,comm,hess_vmap,1.0,po,inputs->recursive,inputs->extended,inputs->hmin,inputs->hmax,inputs->MetScale);
+804c1017
+<         if(RunWakRefinement == 1)
+---
+>         if(inputs->RunWakRefinement == 1)
+806c1019
+<             ComputeMetricWithWake(P, metric_inputs, comm, TKE_vmap, hess_vmap, 1.0, po, hwake, recursive);
+---
+>             ComputeMetricWithWake(P, comm, TKE_vmap, hess_vmap, 1.0, po, inputs->hwake, inputs->recursive,inputs->hmin,inputs->hmax,inputs->MetScale);
+823c1036
+<     
+---
+>     std::cout << "hess_vmap size =  " << hess_vmap.size() << std::endl; 
+862c1075
+< 
+---
+> 	    //std::cout << "di " << gvid << " " << sum_dist << " " << n2nmap.size() << " --->" << m00 << " " << m01 << " " << m02 << " " << m11 << " " << m12 << " " << m22 << std::endl;
+886c1099
+<     /**/
+---
+> 
+1196c1409,1410
+<     std::map<std::set<int>, int > vertref2shell_prism;
+---
+>     //std::map<std::set<int>, int > vertref2shell_prism;
+>     FaceSetPointer m_PMMG_RefsOnShell_2_Prism;
+1207c1421,1439
+<             vertref2shell_prism[shellface2vertref[fhyb]] = EprismNew;
+---
+>             std::set<int>::iterator its;
+>             std::vector<int> refs(shellface2vertref[fhyb].size());
+>             int c = 0;
+>             for(its=shellface2vertref[fhyb].begin();
+>                 its!=shellface2vertref[fhyb].end();its++)
+>             {
+>                 refs[c] = *its;
+>                 c++;
+>             }
+>             FaceSharedPtr RefFacePointer = std::shared_ptr<NekFace>(new NekFace(refs));
+>             pair<FaceSetPointer::iterator, bool> testInsPointer;
+>             testInsPointer = m_PMMG_RefsOnShell_2_Prism.insert(RefFacePointer);
+>             
+>             if(testInsPointer.second)
+>             {
+>                 (*testInsPointer.first)->SetFaceLeftElement(EprismNew);
+>             }
+>             
+>             //vertref2shell_prism[shellface2vertref[fhyb]] = EprismNew;
+1569c1801
+<     if( !PMMG_Set_iparameter( parmesh, PMMG_IPARAM_niter, niter ) ) {
+---
+>     if( !PMMG_Set_iparameter( parmesh, PMMG_IPARAM_niter, inputs->niter ) ) {
+1575c1807
+<     if ( PMMG_Set_dparameter(parmesh,PMMG_DPARAM_hausd, hausd) != 1 )
+---
+>     if ( PMMG_Set_dparameter(parmesh,PMMG_DPARAM_hausd, inputs->hausd) != 1 )
+1582c1814
+<     if ( PMMG_Set_dparameter(parmesh,PMMG_DPARAM_hgrad, hgrad) != 1 )
+---
+>     if ( PMMG_Set_dparameter(parmesh,PMMG_DPARAM_hgrad, inputs->hgrad) != 1 )
+1738,1739c1970,1979
+<     int *required = (int*)calloc(MAX4(nVerticesOUT,nTetrahedraOUT,nTrianglesOUT,nEdgesOUT),sizeof(int));
+<     int *refOUT = (int*)calloc(MAX4(nVerticesOUT,nTetrahedraOUT,nTrianglesOUT,nEdgesOUT),sizeof(int));
+---
+>     int *required = (int*)calloc(MAX4(nVerticesOUT,
+>                                       nTetrahedraOUT,
+>                                       nTrianglesOUT,
+>                                       nEdgesOUT),sizeof(int));
+>     
+>     int *refOUT = (int*)calloc(MAX4(nVerticesOUT,
+>                                     nTetrahedraOUT,
+>                                     nTrianglesOUT,
+>                                     nEdgesOUT),sizeof(int));
+>     
+1760c2000
+<     if(niter==0)
+---
+>     if(inputs->niter==0)
+1902,1903d2141
+<                     std::set<int> faceSh;
+< 
+1908d2145
+<                         faceSh.insert(vt3);
+1959,1960d2195
+< 
+<     
+1976,1980c2211,2215
+<         std::map<std::set<int>, int> PMMG_Face2Ref;
+<         std::set<std::set<int> > TotalFaces;
+<         std::set<std::set<int> > InteriorFaces;
+<         std::map<std::set<int>, int> PMMG_Shell2Prism;
+<         //std::map<int,std::vector<int> > PMMG_ShellFace;
+---
+>         
+>         FaceSetPointer m_PMMG_Face2RefPointer;
+>         
+>         //std::map<std::set<int>, int> PMMG_Shell2Prism;
+>         FaceSetPointer m_PMMG_ShellFace2PrismPointer;
+1985c2220,2222
+<         std::map<std::set<int>, int> PMMG_ShellFaces;
+---
+>         FaceSetPointer m_PMMG_ShellFacePointer;
+>         
+>         
+2007c2244
+<             std::set<int> faceSh;
+---
+>             
+2011a2249,2250
+>             
+>             std::set<int> faceSh;
+2016c2255,2258
+<             TotalFaces.insert(faceSh);
+---
+>             std::vector<int> faceShVec(3);
+>             faceShVec[0] = gv0;
+>             faceShVec[1] = gv1;
+>             faceShVec[2] = gv2;
+2018,2021c2260
+<             if(ref2[k]==0)
+<             {
+<                 InteriorFaces.insert(faceSh);
+<             }
+---
+> 
+2024c2263,2273
+<                 PMMG_Face2Ref[faceSh] = ref2[k];
+---
+>                 
+>                 FaceSharedPtr Face2RefPointer = std::shared_ptr<NekFace>(new NekFace(faceShVec));
+>                 pair<FaceSetPointer::iterator, bool> testFace2RefPointer;
+>                 testFace2RefPointer = m_PMMG_Face2RefPointer.insert(Face2RefPointer);
+>                 
+>                 if(testFace2RefPointer.second)
+>                 {
+>                     (*testFace2RefPointer.first)->SetFaceRef(ref2[k]);
+>                 }
+>                 
+>                 
+2050a2300,2308
+>                 FaceSharedPtr ShellFacePointer = std::shared_ptr<NekFace>(new NekFace(faceShVec));
+>                 pair<FaceSetPointer::iterator, bool> testInsPointer;
+>                 testInsPointer = m_PMMG_ShellFacePointer.insert(ShellFacePointer);
+>                 
+>                 if(testInsPointer.second)
+>                 {
+>                     (*testInsPointer.first)->SetFaceID(ref2[k]);
+>                 }
+>                 
+2052d2309
+<                 PMMG_ShellFaces[faceSh] = ref2[k];
+2055d2311
+< 
+2097a2354,2355
+>                     
+>                     
+2101d2358
+<                     
+2105d2361
+<                     
+2172d2427
+<                     
+2175a2431,2434
+>                 std::vector<int> refOnFace(3);
+>                 refOnFace[0] = refOUT[triaNodes2[pos]-1];
+>                 refOnFace[1] = refOUT[triaNodes2[pos+1]-1];
+>                 refOnFace[2] = refOUT[triaNodes2[pos+2]-1];
+2177,2182c2436,2437
+<                 
+<                 std::set<int> test_set;
+<                 test_set.insert(refOUT[triaNodes2[pos]-1]);
+<                 test_set.insert(refOUT[triaNodes2[pos+1]-1]);
+<                 test_set.insert(refOUT[triaNodes2[pos+2]-1]);
+<                 
+---
+>                 FaceSharedPtr RefOnFacePointer              = std::shared_ptr<NekFace>(new NekFace(refOnFace));
+>                 FaceSetPointer::iterator RefsOnShellPointer = m_PMMG_RefsOnShell_2_Prism.find(RefOnFacePointer);
+2184,2187c2439,2440
+<                 
+<                 
+<                 
+<                 if(vertref2shell_prism.find(test_set)!=vertref2shell_prism.end())
+---
+>                 // Mechanism to match up the shell faces from the adapted tetrahedra to the fixed prisms.
+>                 if(RefsOnShellPointer!=m_PMMG_RefsOnShell_2_Prism.end())
+2189,2194c2442,2453
+<                     PMMG_Shell2Prism[faceSh] = vertref2shell_prism[test_set];
+<                     prismFound++;
+<                 }
+<                 else
+<                 {
+<                     std::cout << "Error: Prism connectivity on the shell faces is not found!" << std::endl;
+---
+>                     int PrismID = (*RefsOnShellPointer)->GetFaceLeftElement();
+>                     
+>                     
+>                     FaceSharedPtr FacePointer = std::shared_ptr<NekFace>(new NekFace(faceShVec));
+>                     
+>                     pair<FaceSetPointer::iterator, bool> Shell2PrismPointer;
+>                     Shell2PrismPointer = m_PMMG_ShellFace2PrismPointer.insert(FacePointer);
+>                     
+>                     if(Shell2PrismPointer.second)
+>                     {
+>                         (*Shell2PrismPointer.first)->SetFaceLeftElement(PrismID);
+>                     }
+2198,2199d2456
+<                 test_set.clear();
+<                 
+2244,2245c2501,2502
+<         DistributedParallelState* pmmg_shellfacedist = new DistributedParallelState(PMMG_ShellFaces.size(),comm);
+<         DistributedParallelState* PMMG_Shell2Prismdist = new DistributedParallelState(PMMG_Shell2Prism.size(),comm);
+---
+>         DistributedParallelState* pmmg_shellfacedist = new DistributedParallelState(m_PMMG_ShellFacePointer.size(),comm);
+>         DistributedParallelState* PMMG_Shell2Prismdist = new DistributedParallelState(m_PMMG_ShellFace2PrismPointer.size(),comm);
+2247c2504
+<         if(PMMG_ShellFaces.size()!=PMMG_Shell2Prism.size())
+---
+>         if(m_PMMG_ShellFacePointer.size()!=m_PMMG_ShellFace2PrismPointer.size())
+2249c2506
+<             std::cout << world_rank << " PMMG_ShellFaces size " << PMMG_ShellFaces.size() << " pmmg_shellfacedist->getNel() " << pmmg_shellfacedist->getNel() << " PMMG_Shell2Prismdist->getNel() = "<< PMMG_Shell2Prismdist->getNel() << " prismFound-> " << prismFound << " " << faceCovered << " " << PMMG_Shell2Prism.size() << " " << vertref2shell_prism.size() <<  std::endl;
+---
+>             std::cout << world_rank << " m_PMMG_ShellFacePointer size " << m_PMMG_ShellFacePointer.size() << " pmmg_shellfacedist->getNel() " << pmmg_shellfacedist->getNel() << " PMMG_Shell2Prismdist->getNel() = "<< PMMG_Shell2Prismdist->getNel() << " prismFound-> " << prismFound << " " << faceCovered << " " << m_PMMG_ShellFace2PrismPointer.size() <<  std::endl;
+2257,2258c2514,2516
+<         std::map<std::set<int>, int> PMMG_SharedFaces;
+<         std::map<std::set<int>, int> PMMG_SharedFacesOwned;
+---
+>         FaceSetPointer m_PMMG_SharedFacePointer;
+>         FaceSetPointer m_PMMG_OwnedSharedFacePointer;
+> 
+2284a2543
+>                     std::vector<int> faceShVec(3);
+2289a2549
+>                         faceShVec[k] = gvt;
+2304d2563
+<                     
+2306,2307c2565,2581
+<                     PMMG_SharedFacesOwned[faceSh]=ft;
+<                     PMMG_SharedFaces[faceSh]=ft;
+---
+>                     
+>                     FaceSharedPtr sharedFacePointer = std::shared_ptr<NekFace>(new NekFace(faceShVec));
+>                     pair<FaceSetPointer::iterator, bool> SharedFPointer;
+>                     SharedFPointer      = m_PMMG_SharedFacePointer.insert(sharedFacePointer);
+>                     pair<FaceSetPointer::iterator, bool> OwnedSharedFPointer;
+>                     OwnedSharedFPointer = m_PMMG_OwnedSharedFacePointer.insert(sharedFacePointer);
+>                     
+>                     if(SharedFPointer.second)
+>                     {
+>                         (*SharedFPointer.first)->SetFaceID(ft);
+>                     }
+>                     
+>                     if(OwnedSharedFPointer.second)
+>                     {
+>                         (*OwnedSharedFPointer.first)->SetFaceID(ft);
+>                     }
+>                     
+2317a2592
+>                     std::vector<int> faceShVec(3);
+2322a2598
+>                         faceShVec[k]=gvt;
+2328c2604,2613
+<                     if(PMMG_SharedFaces.find(faceSh)==PMMG_SharedFaces.end())
+---
+> //                    if(PMMG_SharedFaces.find(faceSh)==PMMG_SharedFaces.end())
+> //                    {
+> //                        PMMG_SharedFaces[faceSh]=ft;
+> //                    }
+>                     
+>                     
+>                     FaceSharedPtr sharedFacePointer = std::shared_ptr<NekFace>(new NekFace(faceShVec));
+>                     pair<FaceSetPointer::iterator, bool> testInsPointer;
+>                     testInsPointer = m_PMMG_SharedFacePointer.insert(sharedFacePointer);
+>                     if(testInsPointer.second)
+2330c2615
+<                         PMMG_SharedFaces[faceSh]=ft;
+---
+>                         (*testInsPointer.first)->SetFaceID(ft);
+2337a2623,2626
+>         
+>         //std::cout << world_rank << " m_PMMG_SharedFacePointer " << m_PMMG_SharedFacePointer.size() << " " << PMMG_SharedFaces.size() << std::endl;
+>         
+>         
+2442,2444c2731,2734
+<         std::map<int,std::vector<int> > fmBnd;
+<         std::map<int,std::vector<int> > fmInt;
+<         std::map<int,std::vector<int> > fmSha;
+---
+>         
+>         std::map<int,FaceSharedPtr> BoundaryFaces;
+>         std::map<int,FaceSharedPtr> InternalFaces;
+>         std::map<int,FaceSharedPtr> SharedFaces;
+2448,2449c2738
+<         std::map<std::set<int>, int> facemap;
+<         std::map<int,std::set<int> > facemap_inv;
+---
+>         FaceSetPointer m_FaceSetPointer;
+2456,2458d2744
+<         std::map<std::set<int>, int> pfacemap;
+<         std::map<int,std::set<int> > pfacemap_inv;
+< 
+2483d2768
+<         
+2551c2836,2842
+<                 std::set<int> FaceRef;
+---
+>                 std::vector<int> FaceVec(3);
+>                 FaceVec[0] = fv0;
+>                 FaceVec[1] = fv1;
+>                 FaceVec[2] = fv2;
+>                 FaceSharedPtr f2ePointer = std::shared_ptr<NekFace>(new NekFace(FaceVec));
+>                 pair<FaceSetPointer::iterator, bool> testInsPointer;
+>                 testInsPointer = m_FaceSetPointer.insert(f2ePointer);
+2553c2844
+<                 if(facemap.find(Face)==facemap.end())
+---
+>                 if(testInsPointer.second)
+2555c2846
+<                     facemap[Face] = fid;
+---
+>                     (*testInsPointer.first)->SetFaceID(fid);
+2598c2889,2896
+<                     if(PMMG_SharedFaces.find(Face) != PMMG_SharedFaces.end())
+---
+>                     
+>                     FaceSetPointer::iterator SharedFPointer         = m_PMMG_SharedFacePointer.find(f2ePointer);
+>                     FaceSetPointer::iterator OwnedSharedFPointer    = m_PMMG_OwnedSharedFacePointer.find(f2ePointer);
+>                     FaceSetPointer::iterator testShellPointer       = m_PMMG_ShellFacePointer.find(f2ePointer);
+>                     FaceSetPointer::iterator testFace2RefPointer    = m_PMMG_Face2RefPointer.find(f2ePointer);
+>                     FaceSetPointer::iterator testShell2PrismPointer = m_PMMG_ShellFace2PrismPointer.find(f2ePointer);
+> 
+>                     if(SharedFPointer != m_PMMG_SharedFacePointer.end())
+2600c2898
+<                         lshf                     = PMMG_SharedFaces[Face];
+---
+>                         lshf                     = (*SharedFPointer)->GetFaceID();
+2606,2608c2904,2906
+<                     if(PMMG_SharedFaces.find(Face)   == PMMG_SharedFaces.end()
+<                        && PMMG_Face2Ref.find(Face)   == PMMG_Face2Ref.end()
+<                        && PMMG_ShellFaces.find(Face) == PMMG_ShellFaces.end())
+---
+>                     if(SharedFPointer == m_PMMG_SharedFacePointer.end()
+>                        && testFace2RefPointer == m_PMMG_Face2RefPointer.end()
+>                        && testShellPointer == m_PMMG_ShellFacePointer.end())
+2610c2908,2909
+<                         fmInt[fid]  = fce;
+---
+>                         InternalFaces[fid] = (*testInsPointer.first);
+>                         //fmInt[fid]  = fce;
+2627,2628c2926
+<                     
+<                     if(PMMG_SharedFacesOwned.find(Face) != PMMG_SharedFacesOwned.end())
+---
+>                     if(OwnedSharedFPointer != m_PMMG_OwnedSharedFacePointer.end())
+2630c2928,2930
+<                         fmSha[fid]               = fce;
+---
+>                         
+>                         SharedFaces[fid]         = (*testInsPointer.first);
+>                         //fmSha[fid]               = fce;
+2635,2636c2935
+<                     
+<                     if(PMMG_ShellFaces.find(Face) != PMMG_ShellFaces.end())
+---
+>                     if(testShellPointer != m_PMMG_ShellFacePointer.end())
+2639a2939
+>                        
+2641c2941
+<                         if(PMMG_Shell2Prism.find(Face)!=PMMG_Shell2Prism.end())
+---
+>                         if(testShell2PrismPointer != m_PMMG_ShellFace2PrismPointer.end())
+2643,2647c2943,2944
+<                             rhshell[fid] = PMMG_Shell2Prism[Face];
+<                             //std::cout << "Do we find it ? " << PMMG_Shell2Prism[Face] << std::endl;
+< 
+<                             // std::cout << "rhshell[fid] "  << rhshell[fid] << std::endl;
+<                             
+---
+>                             rhshell[fid] = (*testShell2PrismPointer)->GetFaceLeftElement();
+>                         
+2661,2665d2957
+<                             
+<                         }
+<                         else
+<                         {
+<                             
+2670c2962,2963
+<                     if(PMMG_Face2Ref.find(Face) != PMMG_Face2Ref.end())
+---
+>                     
+>                     if(testFace2RefPointer != m_PMMG_Face2RefPointer.end())
+2672,2673c2965,2968
+<                         int FaceRef         = PMMG_Face2Ref[Face];
+<                         fmBnd[fid]          = fce;
+---
+>                         int FaceRef         = (*testFace2RefPointer)->GetFaceRef();
+>                         
+>                         BoundaryFaces[fid] = f2ePointer;
+>                         //fmBnd[fid]          = fce;
+2680c2975,2976
+<                     int fid_n     = facemap[Face];
+---
+>                     
+>                     int fid_n     = (*testInsPointer.first)->GetFaceID();
+2708a3005
+>         //std::cout << "BoundaryFaces " << BoundaryFaces.size() << std::endl;
+2712,2714c3009
+<         
+<         
+<         if(PMMG_Shell2Prism.size()!=PMMG_ShellFaces.size())
+---
+>         if(m_PMMG_ShellFace2PrismPointer.size()!=m_PMMG_ShellFacePointer.size())
+2716c3011
+<             std::cout << "NOTIFIED !!! " << world_rank << " --> " << rhshell.size() << " " << fmShell.size() << " " << hellofound << " " << PMMG_Shell2Prism.size() << " " << PMMG_ShellFaces.size() << std::endl;
+---
+>             std::cout << "NOTIFIED !!! " << world_rank << " --> " << rhshell.size() << " " << fmShell.size() << " " << hellofound << " " << m_PMMG_ShellFace2PrismPointer.size() << " " << m_PMMG_ShellFacePointer.size() << std::endl;
+2719,2720d3013
+< 
+<         //std::cout << "HELLO FOUND " << world_rank << ":: "<<shellface2vertref.size() << " " << ushell.size() << " " << foundU << " " <<vertref2shell_prism.size() << " " << prismFound << " " <<  hellofound << " " << PMMG_ShellFaces.size() << " " << PMMG_Shell2Prism.size() << std::endl;
+2724c3017
+<         //std::cout << negit << " normals are pointing inwards. " << tag2shelltag.size() << " " << tag2shelltag_glob.size() << " vs " << shelltag2tag_glob.size() << " " << hellofound << " on rnk " << world_rank << std::endl;
+---
+> 
+2830,2833c3123,3126
+<         int nBndFaces       = PMMG_Face2Ref.size();
+<         int nShaFaces       = PMMG_SharedFacesOwned.size();
+<         int nIntFaces       = fmInt.size();
+<         int nLocFaceNBnd    = fmInt.size()+fmSha.size()+fmShell.size();
+---
+>         int nBndFaces       = m_PMMG_Face2RefPointer.size();
+>         int nShaFaces       = m_PMMG_OwnedSharedFacePointer.size();
+>         int nIntFaces       = InternalFaces.size();
+>         int nLocFaceNBnd    = InternalFaces.size()+SharedFaces.size()+fmShell.size();
+2841c3134
+<         //std::cout <<  "right-handed " << world_rank << " " << rh.size() << " " << nShaFaces << " VS " << fmInt.size() << " " << fmSha.size() << " " << fmShell.size() << std::endl;
+---
+>         //std::cout <<  "right-handed " << world_rank << " " << rh.size() << " " << nShaFaces << " VS " << InternalFaces.size() << " " << SharedFaces.size() << " " << fmShell.size() << std::endl;
+2852c3145,3148
+<         for(itm=fmInt.begin();itm!=fmInt.end();itm++)
+---
+>         std::map<int,FaceSharedPtr>::iterator itf;
+>         //        for(itm=fmInt.begin();itm!=fmInt.end();itm++)
+> 
+>         for(itf=InternalFaces.begin();itf!=InternalFaces.end();itf++)
+2854c3150
+<             fid             = itm->first;
+---
+>             fid             = itf->first;
+2861a3158,3159
+>             
+>             std::vector<int> edges = InternalFaces[fid]->GetEdgeIDs();
+2864c3162,3164
+<                 int lvert = glob2locVid[itm->second[q]];
+---
+>                 int vertexID = InternalFaces[fid]->GetEdgeIDs()[q];
+> 
+>                 int lvert = glob2locVid[vertexID];
+2877c3177
+<                 if(LocationSharedVert_update.find(itm->second[q])!=LocationSharedVert_update.end())
+---
+>                 if(LocationSharedVert_update.find(vertexID)!=LocationSharedVert_update.end())
+2879c3179
+<                     fq[q] = LocationSharedVert_update[itm->second[q]];
+---
+>                     fq[q] = LocationSharedVert_update[vertexID];
+2884c3184
+<                     fq[q] = tag2glob[itm->second[q]];
+---
+>                     fq[q] = tag2glob[vertexID];
+2933,2938c3233,3239
+< 	    if(rh[fid] == 0)
+< 	    {
+< 		std::cout <<"Found the face -> " << fid << " " << world_rank << " " << lh[fid] << std::endl;
+< 	    }
+<             ftot++;
+<         }
+---
+>             
+>             if(rh[fid] == 0)
+>             {
+>             std::cout <<"Found the face -> " << fid << " " << world_rank << " " << lh[fid] << std::endl;
+>             }
+>                 ftot++;
+>             }
+3084c3385,3387
+<         for(itm=fmSha.begin();itm!=fmSha.end();itm++)
+---
+>         //for(itm=fmSha.begin();itm!=fmSha.end();itm++)
+> 
+>         for(itf=SharedFaces.begin();itf!=SharedFaces.end();itf++)
+3086c3389
+<             fid             = itm->first;
+---
+>             fid             = itf->first;
+3096c3399
+<                 int lvert = glob2locVid[itm->second[q]];
+---
+>                 int lvert = glob2locVid[itf->second->GetEdgeIDs()[q]];
+3109c3412
+<                 if(LocationSharedVert_update.find(itm->second[q])!=LocationSharedVert_update.end())
+---
+>                 if(LocationSharedVert_update.find(itf->second->GetEdgeIDs()[q])!=LocationSharedVert_update.end())
+3111c3414
+<                     fq[q] = LocationSharedVert_update[itm->second[q]];
+---
+>                     fq[q] = LocationSharedVert_update[itf->second->GetEdgeIDs()[q]];
+3116c3419
+<                     fq[q] = tag2glob[itm->second[q]];
+---
+>                     fq[q] = tag2glob[itf->second->GetEdgeIDs()[q]];
+3592c3895,3896
+< 	    if(rhp[gfid] == 0)
+---
+>             
+>             if(rhp[gfid] == 0)
+4047a4352
+> 
+4049a4355,4356
+>                         int vertexID = BoundaryFaces[bcface]->GetEdgeIDs()[w];
+>                         int lvert = glob2locVid[vertexID];
+4051d4357
+<                         int lvert = glob2locVid[fmBnd[bcface][w]];
+4063c4369
+<                         if(LocationSharedVert_update.find(fmBnd[bcface][w])!=LocationSharedVert_update.end())
+---
+>                         if(LocationSharedVert_update.find(vertexID)!=LocationSharedVert_update.end())
+4065,4066c4371,4372
+<                             fq[w] = LocationSharedVert_update[fmBnd[bcface][w]];
+<                             ifn_bc_i->setVal(fbc,w+1,LocationSharedVert_update[fmBnd[bcface][w]]);
+---
+>                             fq[w] = LocationSharedVert_update[vertexID];
+>                             ifn_bc_i->setVal(fbc,w+1,LocationSharedVert_update[vertexID]);
+4075,4076c4381,4382
+<                             fq[w] = tag2glob[fmBnd[bcface][w]];
+<                             ifn_bc_i->setVal(fbc,w+1,tag2glob[fmBnd[bcface][w]]);
+---
+>                             fq[w] = tag2glob[vertexID];
+>                             ifn_bc_i->setVal(fbc,w+1,tag2glob[vertexID]);
+4083a4390
+>                     //std::cout << std::endl;
+4563a4871
+>     
